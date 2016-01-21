@@ -17,6 +17,9 @@
 
 package org.sufficientlysecure.keychain.remote.ui;
 
+
+import java.util.ArrayList;
+
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -38,12 +41,11 @@ import org.sufficientlysecure.keychain.provider.KeychainContract;
 import org.sufficientlysecure.keychain.provider.ProviderHelper;
 import org.sufficientlysecure.keychain.remote.AccountSettings;
 import org.sufficientlysecure.keychain.remote.AppSettings;
-import org.sufficientlysecure.keychain.ui.base.BaseActivity;
 import org.sufficientlysecure.keychain.ui.SelectPublicKeyFragment;
+import org.sufficientlysecure.keychain.ui.base.BaseActivity;
 import org.sufficientlysecure.keychain.ui.util.Notify;
+import org.sufficientlysecure.keychain.util.Arrays;
 import org.sufficientlysecure.keychain.util.Log;
-
-import java.util.ArrayList;
 
 // TODO: make extensible BaseRemoteServiceActivity and extend these cases from it
 public class RemoteServiceActivity extends BaseActivity {
@@ -268,8 +270,13 @@ public class RemoteServiceActivity extends BaseActivity {
                             public void onClick(View v) {
                                 // add key ids to params Bundle for new request
                                 Intent resultData = extras.getParcelable(EXTRA_DATA);
-                                resultData.putExtra(OpenPgpApi.EXTRA_KEY_IDS,
-                                        mSelectFragment.getSelectedMasterKeyIds());
+
+                                long[] selectedKeyIds = mSelectFragment.getSelectedMasterKeyIds();
+                                if (resultData.hasExtra(OpenPgpApi.EXTRA_KEY_IDS)) {
+                                    long[] previousKeyIds = resultData.getLongArrayExtra(OpenPgpApi.EXTRA_KEY_IDS);
+                                    selectedKeyIds = Arrays.concatenate(selectedKeyIds, previousKeyIds);
+                                }
+                                resultData.putExtra(OpenPgpApi.EXTRA_KEY_IDS, selectedKeyIds);
 
                                 RemoteServiceActivity.this.setResult(RESULT_OK, resultData);
                                 RemoteServiceActivity.this.finish();

@@ -124,7 +124,7 @@ public class KeychainExternalProvider extends ContentProvider {
                 projectionMap.put(EmailStatus.EMAIL_ADDRESS,
                         Tables.USER_PACKETS + "." + UserPackets.USER_ID + " AS " + EmailStatus.EMAIL_ADDRESS);
                 projectionMap.put(EmailStatus.EMAIL_KEY_REFERENCE,
-                        Tables.USER_PACKETS + "." + UserPackets.MASTER_KEY_ID + " AS " + EmailStatus.EMAIL_KEY_REFERENCE);
+                        Tables.USER_PACKETS + "." + UserPackets.USER_ID + " AS " + EmailStatus.EMAIL_KEY_REFERENCE);
                 // we take the minimum (>0) here, where "1" is "verified by known secret key", "2" is "self-certified"
                 projectionMap.put(EmailStatus.EMAIL_STATUS, "CASE ( MIN (" + Certs.VERIFIED + " ) ) "
                         // remap to keep this provider contract independent from our internal representation
