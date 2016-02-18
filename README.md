@@ -47,16 +47,16 @@ Expand the Tools directory and select "Android SDK Build-tools (Version 23.0.1)"
 Expand the Extras directory and install "Android Support Repository"
 Select SDK Platform for API levels 21, 22, and 23.
 5. Export ANDROID_HOME pointing to your Android SDK
-6. Execute ``./gradlew assembleDebug``
-7. You can install the app with ``adb install -r OpenKeychain/build/outputs/apk/OpenKeychain-debug-unaligned.apk``
+6. Execute ``./gradlew assembleFdroidDebug``
+7. You can install the app with ``adb install -r OpenKeychain/build/outputs/apk/OpenKeychain-fdroid-debug.apk``
 
 ### Run Tests
 1. Use OpenJDK instead of Oracle JDK
-2. Execute ``./gradlew clean testDebug --continue``
+2. Execute ``./gradlew clean testFdroidDebug --continue``
 
 ### Run Jacoco Test Coverage
 1. Use OpenJDK instead of Oracle JDK
-2. Execute ``./gradlew clean testDebug jacocoTestReport``
+2. Execute ``./gradlew clean testFdroidDebug jacocoTestReport``
 3. Report is here: OpenKeychain/build/reports/jacoco/jacocoTestReport/html/index.html
 
 ### Development with Android Studio
@@ -71,13 +71,10 @@ We are using the newest [Android Studio](http://developer.android.com/sdk/instal
 
 ### Bouncy Castle
 
-#### Spongy Castle
-
-Spongy Castle is the stock Bouncy Castle libraries with a couple of small changes to make it work on Android. OpenKeychain uses a forked version with some small changes. These changes will been sent to Bouncy Castle, and Spongy Castle will be used again when they have filtered down.
+OpenKeychain uses a forked version with some small changes. These changes will been sent to Bouncy Castle.
 
 see
-* Fork: https://github.com/openpgp-keychain/spongycastle
-* Spongy Castle: http://rtyley.github.com/spongycastle/
+* Fork: https://github.com/openpgp-keychain/bouncycastle
 
 #### Bouncy Castle resources
 

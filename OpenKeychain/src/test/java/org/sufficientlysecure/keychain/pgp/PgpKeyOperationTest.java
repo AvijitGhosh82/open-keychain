@@ -28,19 +28,19 @@ import org.junit.runner.RunWith;
 import org.robolectric.*;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLog;
-import org.spongycastle.bcpg.BCPGInputStream;
-import org.spongycastle.bcpg.Packet;
-import org.spongycastle.bcpg.PacketTags;
-import org.spongycastle.bcpg.S2K;
-import org.spongycastle.bcpg.SecretKeyPacket;
-import org.spongycastle.bcpg.SecretSubkeyPacket;
-import org.spongycastle.bcpg.SignaturePacket;
-import org.spongycastle.bcpg.UserAttributePacket;
-import org.spongycastle.bcpg.UserAttributeSubpacket;
-import org.spongycastle.bcpg.UserIDPacket;
-import org.spongycastle.bcpg.sig.KeyFlags;
-import org.spongycastle.jce.provider.BouncyCastleProvider;
-import org.spongycastle.openpgp.PGPSignature;
+import org.bouncycastle.bcpg.BCPGInputStream;
+import org.bouncycastle.bcpg.Packet;
+import org.bouncycastle.bcpg.PacketTags;
+import org.bouncycastle.bcpg.S2K;
+import org.bouncycastle.bcpg.SecretKeyPacket;
+import org.bouncycastle.bcpg.SecretSubkeyPacket;
+import org.bouncycastle.bcpg.SignaturePacket;
+import org.bouncycastle.bcpg.UserAttributePacket;
+import org.bouncycastle.bcpg.UserAttributeSubpacket;
+import org.bouncycastle.bcpg.UserIDPacket;
+import org.bouncycastle.bcpg.sig.KeyFlags;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.openpgp.PGPSignature;
 import org.sufficientlysecure.keychain.WorkaroundBuildConfig;
 import org.sufficientlysecure.keychain.operations.results.OperationResult.LogType;
 import org.sufficientlysecure.keychain.operations.results.OperationResult.OperationLog;
@@ -1254,7 +1254,7 @@ public class PgpKeyOperationTest {
                 modified.getEncoded(), false, 0);
         Assert.assertEquals("secret key type should be 'pin' after this",
                 SecretKeyType.PIN,
-                secretRing.getSecretKey().getSecretKeyType());
+                secretRing.getSecretKey().getSecretKeyTypeSuperExpensive());
 
         // need to sleep for a sec, so the timestamp changes for notation data
         Thread.sleep(1000);

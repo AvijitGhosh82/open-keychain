@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Dominik Schürmann <dominik@dominikschuermann.de>
+ * Copyright (C) 2014-2016 Dominik Schürmann <dominik@dominikschuermann.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,6 +46,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ViewAnimator;
 
+import com.github.pinball83.maskededittext.MaskedEditText;
+
 import org.sufficientlysecure.keychain.Constants;
 import org.sufficientlysecure.keychain.R;
 import org.sufficientlysecure.keychain.pgp.CanonicalizedSecretKey;
@@ -54,6 +56,7 @@ import org.sufficientlysecure.keychain.pgp.CanonicalizedSecretKeyRing;
 import org.sufficientlysecure.keychain.pgp.KeyRing;
 import org.sufficientlysecure.keychain.pgp.exception.PgpGeneralException;
 import org.sufficientlysecure.keychain.pgp.exception.PgpKeyNotFoundException;
+import org.sufficientlysecure.keychain.provider.CachedPublicKeyRing;
 import org.sufficientlysecure.keychain.provider.KeychainContract;
 import org.sufficientlysecure.keychain.provider.ProviderHelper;
 import org.sufficientlysecure.keychain.provider.ProviderHelper.NotFoundException;
@@ -112,12 +115,10 @@ public class PassphraseDialogActivity extends FragmentActivity {
 
         // handle empty passphrases by directly returning an empty crypto input parcel
         try {
-            CanonicalizedSecretKeyRing pubRing =
-                    new ProviderHelper(this).getCanonicalizedSecretKeyRing(
-                            requiredInput.getMasterKeyId());
+            CachedPublicKeyRing pubRing =
+                    new ProviderHelper(this).getCachedPublicKeyRing(requiredInput.getMasterKeyId());
             // use empty passphrase for empty passphrase
-            if (pubRing.getSecretKey(requiredInput.getSubKeyId()).getSecretKeyType() ==
-                    SecretKeyType.PASSPHRASE_EMPTY) {
+            if (pubRing.getSecretKeyType(requiredInput.getSubKeyId()) == SecretKeyType.PASSPHRASE_EMPTY) {
                 // also return passphrase back to activity
                 Intent returnIntent = new Intent();
                 cryptoInputParcel.mPassphrase = new Passphrase("");
@@ -159,9 +160,8 @@ public class PassphraseDialogActivity extends FragmentActivity {
     public static class PassphraseDialogFragment extends DialogFragment implements TextView.OnEditorActionListener {
         private EditText mPassphraseEditText;
         private TextView mPassphraseText;
-        private EditText[] mBackupCodeEditText;
+        private MaskedEditText mBackupCodeEditText;
 
-        private CanonicalizedSecretKeyRing mSecretRing = null;
         private boolean mIsCancelled = false;
         private RequiredInputParcel mRequiredInput;
 
@@ -187,12 +187,13 @@ public class PassphraseDialogActivity extends FragmentActivity {
                 View view = inflater.inflate(R.layout.passphrase_dialog_backup_code, null);
                 alert.setView(view);
 
-                mBackupCodeEditText = new EditText[4];
-                mBackupCodeEditText[0] = (EditText) view.findViewById(R.id.backup_code_1);
-                mBackupCodeEditText[1] = (EditText) view.findViewById(R.id.backup_code_2);
-                mBackupCodeEditText[2] = (EditText) view.findViewById(R.id.backup_code_3);
-                mBackupCodeEditText[3] = (EditText) view.findViewById(R.id.backup_code_4);
-                setupEditTextFocusNext(mBackupCodeEditText);
+                mBackupCodeEditText = (MaskedEditText) view.findViewById(R.id.backup_code);
+                // NOTE: order of these method calls matter, see setupAutomaticLinebreak()
+                mBackupCodeEditText.setInputType(
+                        InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+                setupAutomaticLinebreak(mBackupCodeEditText);
+                mBackupCodeEditText.setImeActionLabel(getString(android.R.string.ok), EditorInfo.IME_ACTION_DONE);
+                mBackupCodeEditText.setOnEditorActionListener(this);
 
                 AlertDialog dialog = alert.create();
                 dialog.setButton(DialogInterface.BUTTON_POSITIVE,
@@ -233,24 +234,20 @@ public class PassphraseDialogActivity extends FragmentActivity {
                     long subKeyId = mRequiredInput.getSubKeyId();
 
                     ProviderHelper helper = new ProviderHelper(activity);
-                    mSecretRing = helper.getCanonicalizedSecretKeyRing(
+                    CachedPublicKeyRing cachedPublicKeyRing = helper.getCachedPublicKeyRing(
                             KeychainContract.KeyRings.buildUnifiedKeyRingsFindBySubkeyUri(subKeyId));
                     // yes the inner try/catch block is necessary, otherwise the final variable
                     // above can't be statically verified to have been set in all cases because
                     // the catch clause doesn't return.
-                    try {
-                        String mainUserId = mSecretRing.getPrimaryUserIdWithFallback();
-                        KeyRing.UserId mainUserIdSplit = KeyRing.splitUserId(mainUserId);
-                        if (mainUserIdSplit.name != null) {
-                            userId = mainUserIdSplit.name;
-                        } else {
-                            userId = getString(R.string.user_id_no_name);
-                        }
-                    } catch (PgpKeyNotFoundException e) {
-                        userId = null;
+                    String mainUserId = cachedPublicKeyRing.getPrimaryUserIdWithFallback();
+                    KeyRing.UserId mainUserIdSplit = KeyRing.splitUserId(mainUserId);
+                    if (mainUserIdSplit.name != null) {
+                        userId = mainUserIdSplit.name;
+                    } else {
+                        userId = getString(R.string.user_id_no_name);
                     }
 
-                    keyType = mSecretRing.getSecretKey(subKeyId).getSecretKeyType();
+                    keyType = cachedPublicKeyRing.getSecretKeyType(subKeyId);
                     switch (keyType) {
                         case PASSPHRASE:
                             message = getString(R.string.passphrase_for, userId);
@@ -271,7 +268,7 @@ public class PassphraseDialogActivity extends FragmentActivity {
                             throw new AssertionError("Unhandled SecretKeyType (should not happen)");
                     }
 
-                } catch (ProviderHelper.NotFoundException e) {
+                } catch (PgpKeyNotFoundException | ProviderHelper.NotFoundException e) {
                     alert.setTitle(R.string.title_key_not_found);
                     alert.setMessage(getString(R.string.key_not_found, mRequiredInput.getSubKeyId()));
                     alert.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
@@ -330,32 +327,16 @@ public class PassphraseDialogActivity extends FragmentActivity {
             return dialog;
         }
 
-        private static void setupEditTextFocusNext(final EditText[] backupCodes) {
-            for (int i = 0; i < backupCodes.length - 1; i++) {
-
-                final int next = i + 1;
-
-                backupCodes[i].addTextChangedListener(new TextWatcher() {
-                    @Override
-                    public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                    }
-
-                    @Override
-                    public void onTextChanged(CharSequence s, int start, int before, int count) {
-                        boolean inserting = before < count;
-                        boolean cursorAtEnd = (start + count) == 6;
-
-                        if (inserting && cursorAtEnd) {
-                            backupCodes[next].requestFocus();
-                        }
-                    }
-
-                    @Override
-                    public void afterTextChanged(Editable s) {
-                    }
-                });
-
-            }
+        /**
+         * Automatic line break with max 6 lines for smaller displays
+         * <p/>
+         * NOTE: I was not able to get this behaviour using XML!
+         * Looks like the order of these method calls matter, see http://stackoverflow.com/a/11171307
+         */
+        private void setupAutomaticLinebreak(TextView textview) {
+            textview.setSingleLine(true);
+            textview.setMaxLines(6);
+            textview.setHorizontallyScrolling(false);
         }
 
         @Override
@@ -369,17 +350,8 @@ public class PassphraseDialogActivity extends FragmentActivity {
                 public void onClick(View v) {
 
                     if (mRequiredInput.mType == RequiredInputType.BACKUP_CODE) {
-                        StringBuilder backupCodeInput = new StringBuilder(26);
-                        for (EditText editText : mBackupCodeEditText) {
-                            if (editText.getText().length() < 6) {
-                                return;
-                            }
-                            backupCodeInput.append(editText.getText());
-                            backupCodeInput.append('-');
-                        }
-                        backupCodeInput.deleteCharAt(backupCodeInput.length() - 1);
-
-                        Passphrase passphrase = new Passphrase(backupCodeInput.toString());
+                        Passphrase passphrase =
+                                new Passphrase(mBackupCodeEditText.getText().toString());
                         finishCaching(passphrase);
 
                         return;
@@ -389,7 +361,7 @@ public class PassphraseDialogActivity extends FragmentActivity {
                     final int timeToLiveSeconds = mTimeToLiveSpinner.getSelectedTimeToLive();
 
                     // Early breakout if we are dealing with a symmetric key
-                    if (mSecretRing == null) {
+                    if (mRequiredInput.mType == RequiredInputType.PASSPHRASE_SYMMETRIC) {
                         if (!mRequiredInput.mSkipCaching) {
                             PassphraseCacheService.addCachedPassphrase(getActivity(),
                                     Constants.key.symmetric, Constants.key.symmetric, passphrase,
@@ -403,32 +375,48 @@ public class PassphraseDialogActivity extends FragmentActivity {
                     mLayout.setDisplayedChild(1);
                     positive.setEnabled(false);
 
-                    new AsyncTask<Void, Void, Boolean>() {
+                    new AsyncTask<Void, Void, CanonicalizedSecretKey>() {
+
                         @Override
-                        protected Boolean doInBackground(Void... params) {
+                        protected CanonicalizedSecretKey doInBackground(Void... params) {
                             try {
-                                // wait some 100ms here, give the user time to appreciate the progress bar
-                                try {
-                                    Thread.sleep(100);
-                                } catch (InterruptedException e) {
-                                    // never mind
+                                long timeBeforeOperation = System.currentTimeMillis();
+
+                                Long subKeyId = mRequiredInput.getSubKeyId();
+                                CanonicalizedSecretKeyRing secretKeyRing =
+                                        new ProviderHelper(getActivity()).getCanonicalizedSecretKeyRing(
+                                                KeychainContract.KeyRings.buildUnifiedKeyRingsFindBySubkeyUri(subKeyId));
+                                CanonicalizedSecretKey secretKeyToUnlock =
+                                        secretKeyRing.getSecretKey(subKeyId);
+
+                                // this is the operation may take a very long time (100ms to several seconds!)
+                                boolean unlockSucceeded = secretKeyToUnlock.unlock(passphrase);
+
+                                // if it didn't take that long, give the user time to appreciate the progress bar
+                                long operationTime = System.currentTimeMillis() -timeBeforeOperation;
+                                if (operationTime < 100) {
+                                    try {
+                                        Thread.sleep(100 -operationTime);
+                                    } catch (InterruptedException e) {
+                                        // ignore
+                                    }
                                 }
-                                // make sure this unlocks
-                                return mSecretRing.getSecretKey(mRequiredInput.getSubKeyId()).unlock(passphrase);
-                            } catch (PgpGeneralException e) {
+
+                                return unlockSucceeded ? secretKeyToUnlock : null;
+                            } catch (NotFoundException | PgpGeneralException e) {
                                 Toast.makeText(getActivity(), R.string.error_could_not_extract_private_key,
                                         Toast.LENGTH_SHORT).show();
 
                                 getActivity().setResult(RESULT_CANCELED);
                                 dismiss();
                                 getActivity().finish();
-                                return false;
+                                return null;
                             }
                         }
 
                         /** Handle a good or bad passphrase. This happens in the UI thread!  */
                         @Override
-                        protected void onPostExecute(Boolean result) {
+                        protected void onPostExecute(CanonicalizedSecretKey result) {
                             super.onPostExecute(result);
 
                             // if we were cancelled in the meantime, the result isn't relevant anymore
@@ -437,7 +425,7 @@ public class PassphraseDialogActivity extends FragmentActivity {
                             }
 
                             // if the passphrase was wrong, reset and re-enable the dialogue
-                            if (!result) {
+                            if (result == null) {
                                 mPassphraseEditText.setText("");
                                 mPassphraseEditText.setError(getString(R.string.wrong_passphrase));
                                 mLayout.setDisplayedChild(0);
@@ -455,8 +443,8 @@ public class PassphraseDialogActivity extends FragmentActivity {
 
                                 try {
                                     PassphraseCacheService.addCachedPassphrase(getActivity(),
-                                            mSecretRing.getMasterKeyId(), mRequiredInput.getSubKeyId(), passphrase,
-                                            mSecretRing.getPrimaryUserIdWithFallback(), timeToLiveSeconds);
+                                            mRequiredInput.getMasterKeyId(), mRequiredInput.getSubKeyId(), passphrase,
+                                            result.getRing().getPrimaryUserIdWithFallback(), timeToLiveSeconds);
                                 } catch (PgpKeyNotFoundException e) {
                                     Log.e(Constants.TAG, "adding of a passphrase failed", e);
                                 }

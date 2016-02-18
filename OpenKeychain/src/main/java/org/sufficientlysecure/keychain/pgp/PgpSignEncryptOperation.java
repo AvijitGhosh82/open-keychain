@@ -23,19 +23,19 @@ import android.content.Context;
 import android.os.Parcelable;
 import android.support.annotation.NonNull;
 
-import org.spongycastle.bcpg.ArmoredOutputStream;
-import org.spongycastle.bcpg.BCPGOutputStream;
-import org.spongycastle.bcpg.CompressionAlgorithmTags;
-import org.spongycastle.openpgp.PGPCompressedDataGenerator;
-import org.spongycastle.openpgp.PGPEncryptedDataGenerator;
-import org.spongycastle.openpgp.PGPException;
-import org.spongycastle.openpgp.PGPLiteralData;
-import org.spongycastle.openpgp.PGPLiteralDataGenerator;
-import org.spongycastle.openpgp.PGPSignatureGenerator;
-import org.spongycastle.openpgp.operator.jcajce.JcePBEKeyEncryptionMethodGenerator;
-import org.spongycastle.openpgp.operator.jcajce.JcePGPDataEncryptorBuilder;
-import org.spongycastle.openpgp.operator.jcajce.NfcSyncPGPContentSignerBuilder;
-import org.spongycastle.openpgp.operator.jcajce.PGPUtil;
+import org.bouncycastle.bcpg.ArmoredOutputStream;
+import org.bouncycastle.bcpg.BCPGOutputStream;
+import org.bouncycastle.bcpg.CompressionAlgorithmTags;
+import org.bouncycastle.openpgp.PGPCompressedDataGenerator;
+import org.bouncycastle.openpgp.PGPEncryptedDataGenerator;
+import org.bouncycastle.openpgp.PGPException;
+import org.bouncycastle.openpgp.PGPLiteralData;
+import org.bouncycastle.openpgp.PGPLiteralDataGenerator;
+import org.bouncycastle.openpgp.PGPSignatureGenerator;
+import org.bouncycastle.openpgp.operator.jcajce.JcePBEKeyEncryptionMethodGenerator;
+import org.bouncycastle.openpgp.operator.jcajce.JcePGPDataEncryptorBuilder;
+import org.bouncycastle.openpgp.operator.jcajce.NfcSyncPGPContentSignerBuilder;
+import org.bouncycastle.openpgp.operator.jcajce.PGPUtil;
 import org.sufficientlysecure.keychain.Constants;
 import org.sufficientlysecure.keychain.R;
 import org.sufficientlysecure.keychain.operations.BaseOperation;
@@ -152,7 +152,7 @@ public class PgpSignEncryptOperation extends BaseOperation {
             }
             // add proprietary header to indicate that this is a key backup
             if (input.isAddBackupHeader()) {
-                armorOut.setHeader("BackupVersion", "1");
+                armorOut.setHeader("BackupVersion", "2");
             }
             out = armorOut;
         } else {
@@ -166,12 +166,13 @@ public class PgpSignEncryptOperation extends BaseOperation {
             updateProgress(R.string.progress_extracting_signature_key, 0, 100);
 
             try {
-                // fetch the indicated master key id (the one whose name we sign in)
-                CanonicalizedSecretKeyRing signingKeyRing =
-                        mProviderHelper.getCanonicalizedSecretKeyRing(input.getSignatureMasterKeyId());
-
-                // fetch the specific subkey to sign with, or just use the master key if none specified
-                signingKey = signingKeyRing.getSecretKey(input.getSignatureSubKeyId());
+                long signingMasterKeyId = input.getSignatureMasterKeyId();
+                long signingSubKeyId = input.getSignatureSubKeyId();
+                {
+                    CanonicalizedSecretKeyRing signingKeyRing =
+                            mProviderHelper.getCanonicalizedSecretKeyRing(signingMasterKeyId);
+                    signingKey = signingKeyRing.getSecretKey(input.getSignatureSubKeyId());
+                }
 
                 // Make sure we are allowed to sign here!
                 if (!signingKey.canSign()) {
@@ -179,7 +180,7 @@ public class PgpSignEncryptOperation extends BaseOperation {
                     return new PgpSignEncryptResult(PgpSignEncryptResult.RESULT_ERROR, log);
                 }
 
-                switch (signingKey.getSecretKeyType()) {
+                switch (mProviderHelper.getCachedPublicKeyRing(signingMasterKeyId).getSecretKeyType(signingSubKeyId)) {
                     case DIVERT_TO_CARD:
                     case PASSPHRASE_EMPTY: {
                         if (!signingKey.unlock(new Passphrase())) {
@@ -196,14 +197,14 @@ public class PgpSignEncryptOperation extends BaseOperation {
                         Passphrase localPassphrase = cryptoInput.getPassphrase();
                         if (localPassphrase == null) {
                             try {
-                                localPassphrase = getCachedPassphrase(signingKeyRing.getMasterKeyId(), signingKey.getKeyId());
+                                localPassphrase = getCachedPassphrase(signingMasterKeyId, signingKey.getKeyId());
                             } catch (PassphraseCacheInterface.NoSecretKeyException ignored) {
                             }
                         }
                         if (localPassphrase == null) {
                             log.add(LogType.MSG_PSE_PENDING_PASSPHRASE, indent + 1);
                             return new PgpSignEncryptResult(log, RequiredInputParcel.createRequiredSignPassphrase(
-                                    signingKeyRing.getMasterKeyId(), signingKey.getKeyId(),
+                                    signingMasterKeyId, signingKey.getKeyId(),
                                     cryptoInput.getSignatureTime()), cryptoInput);
                         }
                         if (!signingKey.unlock(localPassphrase)) {
